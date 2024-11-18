@@ -1,0 +1,65 @@
+x-db-credentials: &db-credentials
+  POSTGRES_USER: &db-user listmonk
+  POSTGRES_PASSWORD: &db-password listmonk
+  POSTGRES_DB: &db-name listmonk
+
+version: '3.9'
+services:
+  app:
+    image: listmonk/listmonk:latest
+    container_name: listmonk_app
+    restart: always
+    ports:
+      - "9000:9000"
+    networks:
+      - default
+    volumes:
+      - ./uploads:/listmonk/uploads:rw
+    hostname: listmonk.example.com
+    depends_on:
+      - db
+    command: [sh, -c, "./listmonk --install --idempotent --yes --config '' && ./listmonk --upgrade --yes --config '' && ./listmonk --config ''"]
+    environment:
+      LISTMONK_app__address: 0.0.0.0:9000
+      LISTMONK_db__user: *db-user
+      LISTMONK_db__password: *db-password
+      LISTMONK_db__database: *db-name
+      LISTMONK_db__host: listmonk_db
+      LISTMONK_db__port: 5432
+      LISTMONK_db__ssl_mode: disable
+      LISTMONK_db__max_open: 25
+      LISTMONK_db__max_idle: 25
+      LISTMONK_db__max_lifetime: 300s
+      TZ: Etc/UTC
+      LISTMONK_ADMIN_USER: ${LISTMONK_ADMIN_USER:-}
+      LISTMONK_ADMIN_PASSWORD: ${LISTMONK_ADMIN_PASSWORD:-}
+    
+  db:
+    image: postgres:14-alpine
+    container_name: listmonk_db
+    restart: always
+    ports:
+      - "5432:5432"
+    networks:
+      - default
+    volumes:
+      - type: volume
+        source: data
+        target: /var/lib/postgresql/data
+    environment:
+      <<: *db-credentials
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U listmonk"]
+      interval: 10s
+      timeout: 5s
+      retries: 6
+
+networks:
+  default:
+    name: docker_listmonk_network
+    driver: bridge
+
+volumes:
+  data:
+    name: docker_listmonk_data
+    driver: local
